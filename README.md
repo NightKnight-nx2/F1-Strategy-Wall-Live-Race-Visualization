@@ -5,12 +5,6 @@
 
 ---
 
-## 📸 Ekran Görüntüleri
-
-> *(Ekran görüntüleri eklenecek)*
-
----
-
 ## ✨ Özellikler
 
 | Özellik | Açıklama |
