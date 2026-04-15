@@ -1,0 +1,52 @@
+# ── Sanal Ortam ──────────────────────────────────────────────
+.venv/
+venv/
+env/
+
+# ── Python ───────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# ── ML Model Dosyaları (train_models.bat ile yeniden üretilir) ──
+backend/models/*.joblib
+backend/models/*.pkl
+backend/models/*.model
+
+# ── FastF1 Cache (klasör yapısını koru, içeriği yoksay) ──────
+cache/*
+!cache/.gitkeep
+
+# ── Ortam Değişkenleri ───────────────────────────────────────
+.env
+.env.local
+.env.*.local
+
+# ── IDE & Editor ─────────────────────────────────────────────
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# ── OS ───────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ── Streamlit ────────────────────────────────────────────────
+.streamlit/secrets.toml
+
+# ── Claude Code ──────────────────────────────────────────────
+.claude/
+
+# ── Log & Geçici ─────────────────────────────────────────────
+*.log
+*.tmp
+*.bak

@@ -1,0 +1,147 @@
+/* frontend/styles/theme.css
+   Red Bull Racing Pit Wall Teması
+   Bu dosya Streamlit app.py içinde st.markdown ile enjekte edilir.
+*/
+
+/* ── Genel Arka Plan & Font ── */
+[data-testid="stAppViewContainer"] {
+  background: #05050f !important;
+  background-image:
+    radial-gradient(ellipse at 20% 50%, rgba(6,0,239,0.06) 0%, transparent 60%),
+    radial-gradient(ellipse at 80% 20%, rgba(255,0,0,0.04) 0%, transparent 50%) !important;
+}
+
+[data-testid="stHeader"] {
+  background: transparent !important;
+}
+
+/* Sidebar */
+[data-testid="stSidebar"] {
+  background: #08081a !important;
+  border-right: 1px solid rgba(6,0,239,0.3) !important;
+}
+
+[data-testid="stSidebar"] * {
+  color: #c8c8e8 !important;
+}
+
+/* ── Metrik Kartları ── */
+[data-testid="stMetric"] {
+  background: linear-gradient(135deg, #0d0d25 0%, #11113a 100%) !important;
+  border: 1px solid rgba(6,0,239,0.35) !important;
+  border-radius: 8px !important;
+  padding: 12px 16px !important;
+}
+
+[data-testid="stMetricLabel"] {
+  color: #8888bb !important;
+  font-size: 11px !important;
+  text-transform: uppercase !important;
+  letter-spacing: 1px !important;
+}
+
+[data-testid="stMetricValue"] {
+  color: #FFFFFF !important;
+  font-size: 22px !important;
+  font-weight: 700 !important;
+}
+
+[data-testid="stMetricDelta"] {
+  font-size: 12px !important;
+  font-weight: 600 !important;
+}
+
+/* ── Başlıklar ── */
+h1, h2, h3, h4 {
+  color: #FFFFFF !important;
+  font-family: 'Formula1', 'Arial Narrow', Arial, sans-serif !important;
+  letter-spacing: 1px !important;
+}
+
+h1 { border-bottom: 2px solid #0600EF; padding-bottom: 8px; }
+h2 { border-left: 3px solid #FF0000; padding-left: 10px; }
+h3 { color: #c0c0e0 !important; }
+
+/* ── DataFrame / Tablolar ── */
+[data-testid="stDataFrame"] {
+  background: #0a0a1f !important;
+  border: 1px solid rgba(6,0,239,0.3) !important;
+  border-radius: 6px !important;
+}
+
+.dataframe thead tr th {
+  background: #0600EF22 !important;
+  color: #FFCC00 !important;
+  font-size: 11px !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.5px !important;
+  border-bottom: 1px solid rgba(6,0,239,0.5) !important;
+}
+
+.dataframe tbody tr td {
+  color: #d0d0f0 !important;
+  font-size: 12px !important;
+  border-color: rgba(255,255,255,0.05) !important;
+}
+
+.dataframe tbody tr:hover td {
+  background: rgba(6,0,239,0.12) !important;
+}
+
+/* ── Progress Bar (lastik aşınması için) ── */
+[data-testid="stProgress"] > div > div {
+  background: rgba(255,255,255,0.08) !important;
+  border-radius: 4px !important;
+}
+
+/* ── Butonlar ── */
+[data-testid="baseButton-secondary"] {
+  background: transparent !important;
+  border: 1px solid #0600EF !important;
+  color: #8899FF !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.5px !important;
+  transition: all 0.2s !important;
+}
+
+[data-testid="baseButton-secondary"]:hover {
+  background: rgba(6,0,239,0.15) !important;
+  color: #FFFFFF !important;
+  border-color: #4466FF !important;
+}
+
+[data-testid="baseButton-primary"] {
+  background: #0600EF !important;
+  border: none !important;
+  color: #FFFFFF !important;
+  font-weight: 700 !important;
+}
+
+/* ── Seçici / Selectbox ── */
+[data-baseweb="select"] {
+  background: #0d0d25 !important;
+  border-color: rgba(6,0,239,0.4) !important;
+}
+
+/* ── Metin inputları ── */
+[data-baseweb="input"] input {
+  background: #0d0d25 !important;
+  color: #FFFFFF !important;
+  border-color: rgba(6,0,239,0.4) !important;
+}
+
+/* ── Bölücü çizgi ── */
+hr {
+  border-color: rgba(6,0,239,0.3) !important;
+}
+
+/* ── Genel text rengi ── */
+p, span, label, li {
+  color: #c8c8e8 !important;
+}
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: #08081a; }
+::-webkit-scrollbar-thumb { background: #0600EF55; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #0600EF99; }

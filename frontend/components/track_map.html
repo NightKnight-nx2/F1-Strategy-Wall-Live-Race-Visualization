@@ -1,0 +1,610 @@
+<!-- frontend/components/track_map.html -->
+<!--
+  F1 Strateji Duvarı — İnteraktif Pist Haritası
+  D3.js v7 + SVG. Araçlar renkli daireler olarak pist üzerinde hareket eder.
+  Hover tooltip: pilot adı, fotoğraf, lastik, sıra, projected standings delta.
+  Streamlit'ten: st.components.v1.html(html_content, height=580)
+  Veri: Streamlit, window.RACE_DATA değişkenini JSON olarak enjekte eder.
+-->
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>F1 Track Map</title>
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: #0a0a14;
+    font-family: 'Formula1', 'Arial Narrow', Arial, sans-serif;
+    overflow: hidden;
+  }
+
+  #map-container {
+    position: relative;
+    width: 100%;
+    height: 560px;
+    background: radial-gradient(ellipse at center, #0d0d20 0%, #050510 100%);
+    border: 1px solid #0600EF44;
+    border-radius: 8px;
+  }
+
+  svg#track-svg {
+    width: 100%;
+    height: 100%;
+  }
+
+  /* Pist yolu */
+  .track-outline {
+    fill: none;
+    stroke: #1a1a3e;
+    stroke-width: 28;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  .track-surface {
+    fill: none;
+    stroke: #2a2a4a;
+    stroke-width: 22;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  .track-line {
+    fill: none;
+    stroke: #3a3a6a;
+    stroke-width: 2;
+    stroke-dasharray: 8,6;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    opacity: 0.5;
+  }
+  .start-finish {
+    stroke: #FFCC00;
+    stroke-width: 3;
+  }
+
+  /* Sürücü daireleri */
+  .driver-circle {
+    cursor: pointer;
+    transition: r 0.15s ease;
+    filter: drop-shadow(0 0 4px currentColor);
+  }
+  .driver-circle:hover {
+    r: 14;
+  }
+  .driver-label {
+    font-size: 9px;
+    font-weight: 700;
+    fill: #ffffff;
+    text-anchor: middle;
+    dominant-baseline: central;
+    pointer-events: none;
+    letter-spacing: 0.5px;
+  }
+
+  /* Tooltip */
+  #tooltip {
+    position: absolute;
+    display: none;
+    background: linear-gradient(135deg, #0a0a1f 0%, #12123a 100%);
+    border: 1px solid #0600EF;
+    border-radius: 8px;
+    padding: 0;
+    min-width: 220px;
+    max-width: 260px;
+    box-shadow: 0 8px 32px rgba(6,0,239,0.4), 0 0 0 1px rgba(255,255,255,0.05);
+    z-index: 1000;
+    pointer-events: none;
+    overflow: hidden;
+  }
+
+  .tooltip-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px 8px;
+    background: rgba(6,0,239,0.15);
+    border-bottom: 1px solid rgba(6,0,239,0.3);
+  }
+
+  .driver-photo {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    border: 2px solid var(--team-color, #0600EF);
+    object-fit: cover;
+    object-position: top center;
+    background: #1a1a3e;
+    flex-shrink: 0;
+  }
+
+  .driver-info h3 {
+    color: #FFFFFF;
+    font-size: 13px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    line-height: 1.2;
+  }
+
+  .driver-info .team-name {
+    color: var(--team-color, #0600EF);
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-top: 2px;
+  }
+
+  .position-badge {
+    margin-left: auto;
+    background: rgba(255, 204, 0, 0.15);
+    border: 1px solid #FFCC00;
+    color: #FFCC00;
+    font-size: 16px;
+    font-weight: 900;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  .tooltip-body {
+    padding: 10px 12px;
+  }
+
+  .tt-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 4px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+    font-size: 11px;
+  }
+  .tt-row:last-child { border-bottom: none; }
+
+  .tt-label {
+    color: #8888aa;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .tt-value {
+    color: #FFFFFF;
+    font-weight: 600;
+    font-size: 11px;
+  }
+
+  .tire-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 7px;
+    border-radius: 10px;
+    font-size: 10px;
+    font-weight: 700;
+  }
+  .tire-SOFT   { background: rgba(255,0,0,0.2);    color: #FF4444; border: 1px solid #FF4444; }
+  .tire-MEDIUM { background: rgba(255,204,0,0.2);  color: #FFCC00; border: 1px solid #FFCC00; }
+  .tire-HARD   { background: rgba(255,255,255,0.1); color: #FFFFFF; border: 1px solid #AAAAAA; }
+  .tire-UNKNOWN { background: rgba(128,128,128,0.2); color: #888888; border: 1px solid #888888; }
+
+  .delta-positive { color: #00FF88; font-weight: 700; }
+  .delta-neutral  { color: #FFCC00; font-weight: 700; }
+
+  .standings-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: rgba(6,0,239,0.08);
+    border-radius: 4px;
+    padding: 4px 6px;
+    margin-top: 2px;
+  }
+  .standings-label { color: #8888aa; font-size: 9px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .standings-value { color: #FFFFFF; font-size: 11px; font-weight: 700; }
+
+  /* Pit uyarı göstergesi */
+  .pit-alert {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 8px;
+    background: rgba(255,0,0,0.12);
+    border: 1px solid rgba(255,0,0,0.4);
+    border-radius: 4px;
+    margin-top: 6px;
+    font-size: 10px;
+    color: #FF6666;
+    font-weight: 600;
+  }
+  .pit-dot {
+    width: 7px; height: 7px;
+    background: #FF4444;
+    border-radius: 50%;
+    animation: blink 1s infinite;
+    flex-shrink: 0;
+  }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.2} }
+</style>
+</head>
+<body>
+
+<div id="map-container">
+  <svg id="track-svg" viewBox="0 0 900 520" preserveAspectRatio="xMidYMid meet">
+    <defs>
+      <filter id="glow">
+        <feGaussianBlur stdDeviation="3" result="blur"/>
+        <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+      </filter>
+      <filter id="driver-glow">
+        <feGaussianBlur stdDeviation="4" result="blur"/>
+        <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+      </filter>
+    </defs>
+
+    <!-- Pist arka planı (Abu Dhabi benzeri oval+köşeli hat) -->
+    <g id="track-group">
+      <!-- Outline (geniş) -->
+      <path class="track-outline" id="track-path-outline"
+        d="M 120,260
+           C 120,180 200,120 300,100
+           C 400,80  500,80  580,100
+           C 650,115 700,140 720,170
+           L 760,220
+           C 780,245 780,270 760,295
+           L 720,340
+           C 700,370 680,390 650,400
+           L 600,420
+           C 560,435 530,440 500,440
+           L 400,440
+           C 360,440 310,430 270,410
+           C 230,390 190,360 160,320
+           C 135,290 120,275 120,260 Z"/>
+
+      <!-- Yüzey -->
+      <path class="track-surface" id="track-path"
+        d="M 120,260
+           C 120,180 200,120 300,100
+           C 400,80  500,80  580,100
+           C 650,115 700,140 720,170
+           L 760,220
+           C 780,245 780,270 760,295
+           L 720,340
+           C 700,370 680,390 650,400
+           L 600,420
+           C 560,435 530,440 500,440
+           L 400,440
+           C 360,440 310,430 270,410
+           C 230,390 190,360 160,320
+           C 135,290 120,275 120,260 Z"/>
+
+      <!-- Orta çizgi (kesik) -->
+      <path class="track-line"
+        d="M 120,260
+           C 120,180 200,120 300,100
+           C 400,80  500,80  580,100
+           C 650,115 700,140 720,170
+           L 760,220
+           C 780,245 780,270 760,295
+           L 720,340
+           C 700,370 680,390 650,400
+           L 600,420
+           C 560,435 530,440 500,440
+           L 400,440
+           C 360,440 310,430 270,410
+           C 230,390 190,360 160,320
+           C 135,290 120,275 120,260 Z"/>
+
+      <!-- Start/Finish çizgisi -->
+      <line class="start-finish" x1="120" y1="245" x2="120" y2="275"
+            filter="url(#glow)"/>
+
+      <!-- S/F etiketi -->
+      <text x="95" y="263" fill="#FFCC00" font-size="9" font-weight="700"
+            text-anchor="middle" letter-spacing="0.5">S/F</text>
+    </g>
+
+    <!-- Sürücü grupları (JS tarafından doldurulacak) -->
+    <g id="drivers-group"></g>
+  </svg>
+
+  <!-- Hover Tooltip -->
+  <div id="tooltip">
+    <div class="tooltip-header">
+      <img class="driver-photo" id="tt-photo" src="" alt="driver" onerror="this.src='data:image/svg+xml,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'44\' height=\'44\' viewBox=\'0 0 44 44\'><circle cx=\'22\' cy=\'22\' r=\'22\' fill=\'%231a1a3e\'/><text x=\'22\' y=\'27\' text-anchor=\'middle\' fill=\'white\' font-size=\'14\'>?</text></svg>'"/>
+      <div class="driver-info">
+        <h3 id="tt-name">---</h3>
+        <div class="team-name" id="tt-team">---</div>
+      </div>
+      <div class="position-badge" id="tt-position">-</div>
+    </div>
+
+    <div class="tooltip-body">
+      <div class="tt-row">
+        <span class="tt-label">Lastik</span>
+        <span class="tt-value">
+          <span class="tire-badge" id="tt-tire-badge">---</span>
+        </span>
+      </div>
+
+      <div class="tt-row">
+        <span class="tt-label">Lastik Yaşı</span>
+        <span class="tt-value"><span id="tt-tire-age">-</span> tur</span>
+      </div>
+
+      <div class="tt-row">
+        <span class="tt-label">Aşınma</span>
+        <span class="tt-value"><span id="tt-wear">-</span>%</span>
+      </div>
+
+      <div class="tt-row">
+        <span class="tt-label">Tahmini Pit</span>
+        <span class="tt-value">
+          Tur <span id="tt-pit-window">-</span>
+        </span>
+      </div>
+
+      <!-- Standings Delta -->
+      <div class="standings-row" style="margin-top:8px;">
+        <div>
+          <div class="standings-label">Mevcut Puan</div>
+          <div class="standings-value" id="tt-current-pts">-</div>
+        </div>
+        <div style="text-align:right">
+          <div class="standings-label">Tahmini Puan</div>
+          <div class="standings-value">
+            <span id="tt-proj-pts">-</span>
+            <span id="tt-delta" class="delta-positive" style="margin-left:4px;font-size:10px;"></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Pit Uyarısı -->
+      <div class="pit-alert" id="tt-pit-alert" style="display:none;">
+        <div class="pit-dot"></div>
+        <span>PIT ÖNERİLİYOR</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// Pist path'i üzerinde konumlandırma yardımcısı
+// ============================================================
+const TRACK_PATH_D = `M 120,260
+   C 120,180 200,120 300,100
+   C 400,80  500,80  580,100
+   C 650,115 700,140 720,170
+   L 760,220
+   C 780,245 780,270 760,295
+   L 720,340
+   C 700,370 680,390 650,400
+   L 600,420
+   C 560,435 530,440 500,440
+   L 400,440
+   C 360,440 310,430 270,410
+   C 230,390 190,360 160,320
+   C 135,290 120,275 120,260 Z`;
+
+// Pist path referansı (SVG koordinat dönüşümü için)
+let trackPathEl = null;
+let trackLength  = 0;
+
+function initTrackPath() {
+  trackPathEl = document.getElementById("track-path");
+  trackLength  = trackPathEl.getTotalLength();
+}
+
+/**
+ * 0–1 arası normalize mesafeyi pist üzerindeki {x, y} noktasına çevirir.
+ * Koordinat: SVG viewBox (0–900 x 0–520)
+ */
+function getPointOnTrack(t) {
+  const pt = trackPathEl.getPointAtLength(t * trackLength);
+  return { x: pt.x, y: pt.y };
+}
+
+// ============================================================
+// Veri Yapıları (Streamlit tarafından güncellenecek)
+// ============================================================
+// window.RACE_DATA formatı:
+// {
+//   drivers: [{
+//     driver_number, abbr, color, team,
+//     position, track_position (0–1),  ← normalize pist pozisyonu
+//     tire, tire_age, lap,
+//     tire_wear_pct, pit_recommended,
+//     pit_window_start, pit_window_end,
+//     current_champ_points, projected_total, delta,
+//     headshot_url
+//   }]
+// }
+
+// Demo verisi — Streamlit bağlı olmadığında gösterim için
+const DEMO_DRIVERS = [
+  { driver_number:"1",  abbr:"VER", color:"#3671C6", team:"Red Bull Racing",  position:1,  track_position:0.00, tire:"SOFT",   tire_age:8,  lap:22, tire_wear_pct:32, pit_recommended:false, pit_window_start:28, pit_window_end:32, current_champ_points:393, projected_total:418, delta:25, headshot_url:"https://www.formula1.com/content/dam/fom-website/drivers/M/MAXVER01_Max_Verstappen/maxver01.png" },
+  { driver_number:"16", abbr:"LEC", color:"#E8002D", team:"Ferrari",           position:2,  track_position:0.05, tire:"MEDIUM", tire_age:15, lap:22, tire_wear_pct:43, pit_recommended:false, pit_window_start:25, pit_window_end:29, current_champ_points:307, projected_total:325, delta:18, headshot_url:"https://www.formula1.com/content/dam/fom-website/drivers/C/CHALEC01_Charles_Leclerc/chalec01.png" },
+  { driver_number:"44", abbr:"HAM", color:"#27F4D2", team:"Mercedes",          position:3,  track_position:0.10, tire:"HARD",   tire_age:20, lap:22, tire_wear_pct:44, pit_recommended:false, pit_window_start:30, pit_window_end:35, current_champ_points:211, projected_total:226, delta:15, headshot_url:"https://www.formula1.com/content/dam/fom-website/drivers/L/LEWHAM01_Lewis_Hamilton/lewham01.png" },
+  { driver_number:"55", abbr:"SAI", color:"#E8002D", team:"Ferrari",           position:4,  track_position:0.15, tire:"SOFT",   tire_age:18, lap:22, tire_wear_pct:72, pit_recommended:true,  pit_window_start:22, pit_window_end:24, current_champ_points:259, projected_total:271, delta:12, headshot_url:"https://www.formula1.com/content/dam/fom-website/drivers/C/CARSAI01_Carlos_Sainz/carsai01.png" },
+  { driver_number:"4",  abbr:"NOR", color:"#FF8000", team:"McLaren",           position:5,  track_position:0.20, tire:"MEDIUM", tire_age:10, lap:22, tire_wear_pct:29, pit_recommended:false, pit_window_start:30, pit_window_end:34, current_champ_points:331, projected_total:341, delta:10, headshot_url:"https://www.formula1.com/content/dam/fom-website/drivers/L/LANNOR01_Lando_Norris/lannor01.png" },
+  { driver_number:"63", abbr:"RUS", color:"#27F4D2", team:"Mercedes",          position:6,  track_position:0.25, tire:"HARD",   tire_age:22, lap:22, tire_wear_pct:49, pit_recommended:false, pit_window_start:28, pit_window_end:32, current_champ_points:235, projected_total:243, delta:8,  headshot_url:"https://www.formula1.com/content/dam/fom-website/drivers/G/GEORUS01_George_Russell/georus01.png" },
+  { driver_number:"81", abbr:"PIA", color:"#FF8000", team:"McLaren",           position:7,  track_position:0.30, tire:"MEDIUM", tire_age:12, lap:22, tire_wear_pct:34, pit_recommended:false, pit_window_start:29, pit_window_end:33, current_champ_points:268, projected_total:274, delta:6,  headshot_url:"https://www.formula1.com/content/dam/fom-website/drivers/O/OSCPIA01_Oscar_Piastri/oscpia01.png" },
+  { driver_number:"14", abbr:"ALO", color:"#229971", team:"Aston Martin",      position:8,  track_position:0.35, tire:"HARD",   tire_age:25, lap:22, tire_wear_pct:56, pit_recommended:false, pit_window_start:25, pit_window_end:29, current_champ_points:70,  projected_total:74,  delta:4,  headshot_url:"https://www.formula1.com/content/dam/fom-website/drivers/F/FERALO01_Fernando_Alonso/feralo01.png" },
+  { driver_number:"11", abbr:"PER", color:"#3671C6", team:"Red Bull Racing",   position:9,  track_position:0.40, tire:"SOFT",   tire_age:6,  lap:22, tire_wear_pct:24, pit_recommended:false, pit_window_start:32, pit_window_end:36, current_champ_points:285, projected_total:287, delta:2,  headshot_url:"https://www.formula1.com/content/dam/fom-website/drivers/S/SERPER01_Sergio_Perez/serper01.png" },
+  { driver_number:"10", abbr:"GAS", color:"#0093CC", team:"Alpine",            position:10, track_position:0.45, tire:"MEDIUM", tire_age:8,  lap:22, tire_wear_pct:23, pit_recommended:false, pit_window_start:31, pit_window_end:35, current_champ_points:26,  projected_total:27,  delta:1,  headshot_url:"https://www.formula1.com/content/dam/fom-website/drivers/P/PIEGAS01_Pierre_Gasly/piegas01.png" },
+  { driver_number:"18", abbr:"STR", color:"#229971", team:"Aston Martin",      position:11, track_position:0.50, tire:"HARD",   tire_age:18, lap:22, tire_wear_pct:40, pit_recommended:false, pit_window_start:28, pit_window_end:33, current_champ_points:24,  projected_total:24,  delta:0,  headshot_url:"https://www.formula1.com/content/dam/fom-website/drivers/L/LANSTR01_Lance_Stroll/lanstr01.png" },
+  { driver_number:"31", abbr:"OCO", color:"#0093CC", team:"Alpine",            position:12, track_position:0.55, tire:"MEDIUM", tire_age:14, lap:22, tire_wear_pct:40, pit_recommended:false, pit_window_start:27, pit_window_end:31, current_champ_points:23,  projected_total:23,  delta:0,  headshot_url:"https://www.formula1.com/content/dam/fom-website/drivers/E/ESTOCO01_Esteban_Ocon/estoco01.png" },
+  { driver_number:"23", abbr:"ALB", color:"#64C4FF", team:"Williams",          position:13, track_position:0.60, tire:"HARD",   tire_age:22, lap:22, tire_wear_pct:49, pit_recommended:false, pit_window_start:26, pit_window_end:30, current_champ_points:12,  projected_total:12,  delta:0,  headshot_url:"https://www.formula1.com/content/dam/fom-website/drivers/A/ALEALB01_Alexander_Albon/alealb01.png" },
+  { driver_number:"22", abbr:"TSU", color:"#6692FF", team:"RB",                position:14, track_position:0.65, tire:"SOFT",   tire_age:10, lap:22, tire_wear_pct:40, pit_recommended:false, pit_window_start:28, pit_window_end:32, current_champ_points:92,  projected_total:92,  delta:0,  headshot_url:"https://www.formula1.com/content/dam/fom-website/drivers/Y/YUKTSU01_Yuki_Tsunoda/yuktsu01.png" },
+  { driver_number:"20", abbr:"MAG", color:"#B6BABD", team:"Haas",             position:15, track_position:0.70, tire:"MEDIUM", tire_age:16, lap:22, tire_wear_pct:46, pit_recommended:false, pit_window_start:26, pit_window_end:30, current_champ_points:16,  projected_total:16,  delta:0,  headshot_url:"https://www.formula1.com/content/dam/fom-website/drivers/K/KEVMAG01_Kevin_Magnussen/kevmag01.png" },
+  { driver_number:"24", abbr:"ZHO", color:"#52E252", team:"Kick Sauber",       position:16, track_position:0.75, tire:"HARD",   tire_age:20, lap:22, tire_wear_pct:44, pit_recommended:false, pit_window_start:27, pit_window_end:31, current_champ_points:6,   projected_total:6,   delta:0,  headshot_url:"https://www.formula1.com/content/dam/fom-website/drivers/G/GUAZHO01_Guanyu_Zhou/guazho01.png" },
+  { driver_number:"3",  abbr:"RIC", color:"#6692FF", team:"RB",                position:17, track_position:0.80, tire:"SOFT",   tire_age:12, lap:22, tire_wear_pct:48, pit_recommended:false, pit_window_start:25, pit_window_end:29, current_champ_points:12,  projected_total:12,  delta:0,  headshot_url:"https://www.formula1.com/content/dam/fom-website/drivers/D/DANRIC01_Daniel_Ricciardo/danric01.png" },
+  { driver_number:"77", abbr:"BOT", color:"#52E252", team:"Kick Sauber",       position:18, track_position:0.85, tire:"MEDIUM", tire_age:18, lap:22, tire_wear_pct:51, pit_recommended:false, pit_window_start:25, pit_window_end:29, current_champ_points:5,   projected_total:5,   delta:0,  headshot_url:"https://www.formula1.com/content/dam/fom-website/drivers/V/VALBOT01_Valtteri_Bottas/valbot01.png" },
+  { driver_number:"27", abbr:"HUL", color:"#B6BABD", team:"Haas",             position:19, track_position:0.90, tire:"HARD",   tire_age:22, lap:22, tire_wear_pct:49, pit_recommended:false, pit_window_start:26, pit_window_end:30, current_champ_points:37,  projected_total:37,  delta:0,  headshot_url:"https://www.formula1.com/content/dam/fom-website/drivers/N/NIHULK01_Nico_Hulkenberg/nihulk01.png" },
+  { driver_number:"2",  abbr:"SAR", color:"#64C4FF", team:"Williams",          position:20, track_position:0.95, tire:"SOFT",   tire_age:8,  lap:22, tire_wear_pct:32, pit_recommended:false, pit_window_start:29, pit_window_end:33, current_champ_points:0,   projected_total:0,   delta:0,  headshot_url:"https://www.formula1.com/content/dam/fom-website/drivers/L/LOGSAR01_Logan_Sargeant/logsar01.png" },
+];
+
+// ============================================================
+// D3 Render
+// ============================================================
+const svg = d3.select("#track-svg");
+const driversGroup = svg.select("#drivers-group");
+const tooltip = document.getElementById("tooltip");
+
+function renderDrivers(drivers) {
+  if (!trackPathEl) return;
+
+  const groups = driversGroup.selectAll(".driver-g")
+    .data(drivers, d => d.driver_number);
+
+  // Enter
+  const enter = groups.enter()
+    .append("g")
+    .attr("class", "driver-g")
+    .style("cursor", "pointer");
+
+  enter.append("circle")
+    .attr("class", "driver-circle")
+    .attr("r", 11)
+    .attr("fill", d => d.color)
+    .attr("stroke", d => d.pit_recommended ? "#FF0000" : "rgba(255,255,255,0.3)")
+    .attr("stroke-width", d => d.pit_recommended ? 3 : 1.5)
+    .attr("filter", "url(#driver-glow)");
+
+  enter.append("text")
+    .attr("class", "driver-label")
+    .text(d => d.abbr);
+
+  // Merge + update pozisyonları
+  const merged = enter.merge(groups);
+
+  merged.each(function(d) {
+    const pt = getPointOnTrack(d.track_position);
+    d3.select(this).attr("transform", `translate(${pt.x},${pt.y})`);
+  });
+
+  merged.select("circle")
+    .attr("stroke", d => d.pit_recommended ? "#FF0000" : "rgba(255,255,255,0.3)")
+    .attr("stroke-width", d => d.pit_recommended ? 3 : 1.5);
+
+  // Exit
+  groups.exit().remove();
+
+  // Tooltip eventleri
+  merged
+    .on("mouseover", (event, d) => showTooltip(event, d))
+    .on("mousemove", (event) => moveTooltip(event))
+    .on("mouseout",  () => hideTooltip());
+}
+
+// ============================================================
+// Tooltip
+// ============================================================
+function showTooltip(event, d) {
+  // Fotoğraf
+  const photo = document.getElementById("tt-photo");
+  photo.src = d.headshot_url || "";
+  photo.style.setProperty("--team-color", d.color);
+
+  document.getElementById("tt-name").textContent = d.abbr;
+  document.getElementById("tt-team").textContent = d.team;
+  document.getElementById("tt-position").textContent = d.position;
+
+  // Lastik
+  const tireBadge = document.getElementById("tt-tire-badge");
+  const compound = (d.tire || "UNKNOWN").toUpperCase();
+  tireBadge.textContent = compound;
+  tireBadge.className = `tire-badge tire-${compound}`;
+  document.getElementById("tt-tire-age").textContent = d.tire_age || "-";
+  document.getElementById("tt-wear").textContent =
+    typeof d.tire_wear_pct === "number" ? d.tire_wear_pct.toFixed(1) : "-";
+
+  // Pit penceresi
+  const pitWin = (d.pit_window_start && d.pit_window_end)
+    ? `${d.pit_window_start}–${d.pit_window_end}`
+    : "-";
+  document.getElementById("tt-pit-window").textContent = pitWin;
+
+  // Standings
+  document.getElementById("tt-current-pts").textContent =
+    d.current_champ_points ?? "-";
+  document.getElementById("tt-proj-pts").textContent =
+    d.projected_total ?? "-";
+  const deltaEl = document.getElementById("tt-delta");
+  if (d.delta > 0) {
+    deltaEl.textContent = `+${d.delta}`;
+    deltaEl.className = "delta-positive";
+  } else {
+    deltaEl.textContent = `${d.delta ?? 0}`;
+    deltaEl.className = "delta-neutral";
+  }
+
+  // Pit uyarısı
+  document.getElementById("tt-pit-alert").style.display =
+    d.pit_recommended ? "flex" : "none";
+
+  tooltip.style.display = "block";
+  moveTooltip(event);
+}
+
+function moveTooltip(event) {
+  const container = document.getElementById("map-container");
+  const rect = container.getBoundingClientRect();
+  let x = event.clientX - rect.left + 12;
+  let y = event.clientY - rect.top + 12;
+
+  // Sağ kenardan taşmayı engelle
+  if (x + 270 > rect.width)  x = event.clientX - rect.left - 280;
+  if (y + 320 > rect.height) y = event.clientY - rect.top  - 330;
+
+  tooltip.style.left = `${x}px`;
+  tooltip.style.top  = `${y}px`;
+}
+
+function hideTooltip() {
+  tooltip.style.display = "none";
+}
+
+// ============================================================
+// Animasyon Döngüsü (Simülasyon Modu)
+// ============================================================
+const TOTAL_DRIVERS = 20;
+let animFrame = 0;
+
+function animateDrivers() {
+  // Gerçek veri yokken sürücüleri pist üzerinde hareket ettir
+  const data = (window.RACE_DATA && window.RACE_DATA.drivers)
+    ? window.RACE_DATA.drivers
+    : DEMO_DRIVERS.map((d, i) => {
+        // Zamanla pist pozisyonunu güncelle
+        const speed = 0.0003 - i * 0.000005;
+        d.track_position = (d.track_position + speed) % 1;
+        return d;
+      });
+
+  renderDrivers(data);
+  animFrame = requestAnimationFrame(animateDrivers);
+}
+
+// ============================================================
+// Başlatma
+// ============================================================
+window.addEventListener("load", () => {
+  initTrackPath();
+  animateDrivers();
+});
+
+// Streamlit'ten veri enjeksiyonu için global fonksiyon
+window.updateRaceData = function(newData) {
+  window.RACE_DATA = newData;
+};
+</script>
+</body>
+</html>
