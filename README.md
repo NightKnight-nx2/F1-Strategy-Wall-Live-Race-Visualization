@@ -106,7 +106,7 @@ f1-strategy-wall/
 
 ### 1. Repoyu Klonla
 ```bash
-git clone https://github.com/KULLANICI_ADI/f1-strategy-wall.git
+git clone https://github.com/NightKnight-nx2/f1-strategy-wall.git
 cd f1-strategy-wall
 ```
 
